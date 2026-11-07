@@ -1,7 +1,6 @@
 # Confounded Assortativity
 
-Code for *Confounded Assortativity: Borrowed Homophily, Interior–Boundary Geometry,
-and Triadic Structure in Directed Networks* (M. Boudourides, manuscript, 2026).
+Code for *Confounded Assortativity in Online Attention Networks* (M. Boudourides, manuscript, 2026).
 
 **Question.** Is the observed homophily of a node attribute X genuine, or is it borrowed
 from another attribute G that both structures the network and is associated with X?
