@@ -26,8 +26,9 @@ scripts/03_lazega.py        Lazega law firm: age | status; office as negative co
 scripts/04_openalex_download.py   OpenAlex download (API key needed)
 scripts/05_openalex_analysis.py   OpenAlex citation network: topic | country (negative control)
 scripts/06_tables.py        LaTeX tables of the paper from results/
+scripts/07_figures.py       figures of the paper (Fig. 1 needs data/thiers; others need only results/)
 results/                    CSV outputs used in the paper
-paper/                      LaTeX source
+paper/                      LaTeX source, tables/ and figures/ (generated)
 data/README.md              where and how to download the (public) data
 ```
 
@@ -41,7 +42,9 @@ python 02_thiers.py
 python 03_lazega.py
 python 04_openalex_download.py   # optional, ~10 min
 python 05_openalex_analysis.py
-python 06_tables.py              # then: cd ../paper && latexmk -pdf main.tex
+python 06_tables.py
+python 07_figures.py
+cd ../paper && latexmk -pdf main.tex
 ```
 Random seeds are fixed; permutation results agree with the closed-form nulls to Monte Carlo error.
 
