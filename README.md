@@ -23,9 +23,9 @@ produced by geography, Quintana-Mathé, Guo, Grinberg & Lazer, 2026.)
 src/ca_core.py              core routines (mixing, IB strata, T/O operators, nulls)
 scripts/01_synthetic.py     synthetic-graph validation (confounding built in by construction), one graph per cell
 scripts/01b_synthetic_replications.py   100 graphs per cell: bias/RMSE of r_cf vs mean permutation r (~25 min)
-scripts/02_thiers.py        Lycée Thiers 2013: gender | class, gender | track
-scripts/02b_thiers_multiplicity.py   max-T (Westfall–Young) and Benjamini–Hochberg adjustment of stratum/operator families
-scripts/02c_thiers_ratio_check.py    E[Q]/E[D] vs E[Q/D] and the second-order expansion
+scripts/02_thiers.py        Lycée Thiers 2013: gender | class, gender | track; one 20,000-permutation set per analysis
+                            shared by all operators/strata (r_perm, SDs, raw / max-T / BH p-values, 2nd-order check)
+scripts/02b_thiers_mc_check.py       300,000-permutation check of E[Q], E[D], E[Q/D] against the closed forms
 scripts/03_lazega.py        Lazega law firm: age | status; office as negative control
 scripts/03b_lazega_sensitivity.py    quartiles, fixed-width bands, continuous (Pearson) codings
 scripts/04_openalex_download.py   OpenAlex download (API key needed)
@@ -46,8 +46,7 @@ python -m pytest -q ../tests
 python 01_synthetic.py
 python 01b_synthetic_replications.py
 python 02_thiers.py
-python 02b_thiers_multiplicity.py
-python 02c_thiers_ratio_check.py
+python 02b_thiers_mc_check.py
 python 03_lazega.py
 python 03b_lazega_sensitivity.py
 python 04_openalex_download.py   # optional, ~10 min
@@ -55,7 +54,7 @@ python 05_openalex_analysis.py
 python 06_tables.py
 python 07_figures.py
 ```
-Random seeds are fixed. On whole networks r_cf and r_perm agree to Monte Carlo error; on very small strata they can differ (see `02c_thiers_ratio_check.py`).
+Random seeds are fixed. On whole networks r_cf and r_perm agree to Monte Carlo error; on very small strata they can differ (column `second_order` in results/thiers.csv).
 
 ## Output columns (results/*.csv)
 `r_obs` observed assortativity; `r_perm` mean permutation assortativity E[Q/D] over within-G permutations (`sd_null` its SD);

@@ -1,7 +1,9 @@
-"""Lycee Thiers 2013 (SocioPatterns): gender homophily conditioned on class / track."""
+"""Lycee Thiers 2013 (SocioPatterns): gender homophily conditioned on class / track.
+One set of 20,000 within-block permutations per analysis is shared by all operators and strata, so
+r_perm, SDs, unadjusted / max-T / BH p-values and the second-order check are mutually consistent."""
 import numpy as np, pandas as pd, scipy.sparse as sp
 from common import DATA, RES
-from ca_core import operator_arcsets, borrowed_table, newman, mixing
+from ca_core import operator_arcsets, family_analysis, newman, mixing
 
 rng = np.random.default_rng(2013)
 md = pd.read_csv(f"{DATA}/thiers/metadata_2013.txt", sep="\t", header=None, names=["id", "cls", "sex"])
@@ -23,7 +25,7 @@ for net, E in nets.items():
         x, g = att[X], att[G]
         arcs, codes, bd = operator_arcsets(A, g, n)
         u, v, w = arcs["A"]; rG = newman(mixing(g, u, v, w, g.max() + 1))
-        for r in borrowed_table(x, g, arcs, codes, rng, 2000):
+        for r in family_analysis(x, g, arcs, codes, rng, 20000):
             rows.append(dict(network=net, X=X, G=G, r_G=rG, n_interior=int((~bd).sum()), n=n, **r))
 pd.DataFrame(rows).to_csv(f"{RES}/thiers.csv", index=False)
 print(pd.DataFrame(rows).query("stratum=='all'").round(3).to_string(index=False))

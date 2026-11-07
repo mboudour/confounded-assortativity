@@ -100,28 +100,36 @@ def fig_dotplot():
 
 # ---------------------------------------------------------------- Fig. 3
 def fig_heatmap():
+    """Excess r - r_cf; filled marker: max-T adjusted p < 0.05; hollow marker: unadjusted p < 0.05 only."""
     t = pd.read_csv(f"{RES}/thiers.csv"); s = t[(t.X == "sex") & (t.G == "class") & (t.stratum != "all")]
-    fig, axes = plt.subplots(1, 2, figsize=(6.2, 2.3), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(6.2, 2.4), sharey=True)
     norm = TwoSlopeNorm(vmin=-0.35, vcenter=0, vmax=0.35)
     for ax, net, title in zip(axes, ["friendship", "diaries"], ["Friendship survey", "Contact diaries"]):
-        M = np.full((3, 4), np.nan); P = np.ones((3, 4))
+        M = np.full((3, 4), np.nan); P = np.ones((3, 4)); PA = np.ones((3, 4))
         for i, op in enumerate("ATO"):
             for j, st in enumerate(["II", "IB", "BI", "BB"]):
                 r = s[(s.network == net) & (s.operator == op) & (s.stratum == st)].iloc[0]
-                M[i, j] = r.excess; P[i, j] = r.p_two
+                M[i, j] = r.excess; P[i, j] = r.p_two; PA[i, j] = r.p_maxT
         ax.imshow(M, cmap=DIV, norm=norm, aspect="auto")
         for i in range(3):
             for j in range(4):
-                star = "**" if P[i, j] < 0.01 else ("*" if P[i, j] < 0.05 else "")
-                ax.text(j, i, f"{M[i, j]:+.2f}{star}", ha="center", va="center", fontsize=8.5, color=INK)
+                ax.text(j, i + 0.12, f"{M[i, j]:+.2f}", ha="center", va="center", fontsize=8.5, color=INK)
+                if PA[i, j] < 0.05:
+                    ax.plot(j, i - 0.25, "o", ms=5, mfc=INK, mec=INK)
+                elif P[i, j] < 0.05:
+                    ax.plot(j, i - 0.25, "o", ms=5, mfc="none", mec=INK, mew=1)
         ax.set_xticks(range(4)); ax.set_xticklabels(["II", "IB", "BI", "BB"])
         ax.set_yticks(range(3)); ax.set_yticklabels(["$A$", "$T$", "$O$"])
         ax.set_xticks(np.arange(-.5, 4), minor=True); ax.set_yticks(np.arange(-.5, 3), minor=True)
         ax.grid(which="minor", color=SURF, lw=2); ax.tick_params(which="minor", length=0)
         for sp in ax.spines.values(): sp.set_visible(False)
         ax.set_title(title, fontsize=9, color=INK)
+    from matplotlib.lines import Line2D
+    fig.legend(handles=[Line2D([], [], ls="", marker="o", ms=5, mfc=INK, mec=INK, label="max-$T$ adjusted $p<0.05$"),
+                        Line2D([], [], ls="", marker="o", ms=5, mfc="none", mec=INK, label="unadjusted $p<0.05$ only")],
+               loc="lower center", bbox_to_anchor=(0.45, -0.08), ncol=2, frameon=False, fontsize=8)
     cb = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=DIV), ax=axes, fraction=0.04, pad=0.02)
-    cb.set_label("excess  $r - r_0$", color=INK); cb.outline.set_visible(False)
+    cb.set_label("excess  $r - r_{\\mathrm{cf}}$", color=INK); cb.outline.set_visible(False)
     fig.savefig(os.path.join(FIG, "fig3_excess_profile.pdf"), bbox_inches="tight"); plt.close(fig)
 
 # ---------------------------------------------------------------- Fig. 4

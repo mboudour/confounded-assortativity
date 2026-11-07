@@ -159,3 +159,49 @@ def maxT_adjust(obs, draws):
     for rank, i in reversed(list(enumerate(order, start=1))):
         run = min(run, p_raw[i] * m / rank); bh[i] = run
     return (obs - draws.mean(0)) / np.where(draws.std(0) > 0, draws.std(0), np.nan), p_raw, p_maxT, bh
+
+
+def family_analysis(x, g, arcsets, ib_codes, rng, n_perm=20000):
+    """One set of within-block permutations shared by every member of the family
+    (operator x {all, II, IB, BI, BB}), so that r_perm, SDs, raw, max-T and BH p-values and the
+    second-order check all come from the same draws. Returns a list of dict rows."""
+    K = x.max() + 1; members = []
+    for op, (u, v, w) in arcsets.items():
+        codes = ib_codes.get(op)
+        subsets = [("all", np.ones(len(u), bool))]
+        if codes is not None:
+            subsets += [(STRATA[t], codes == t) for t in range(4)]
+        for st, m in subsets:
+            if m.sum() > 0:
+                members.append((op, st, u[m], v[m], w[m]))
+    F = len(members)
+    def qd(y, uu, vv, ww):
+        e = mixing(y, uu, vv, ww, K); e = e / e.sum(); a, b = e.sum(1), e.sum(0)
+        return np.trace(e) - a @ b, 1 - a @ b
+    Qd = np.empty((n_perm, F)); Dd = np.empty((n_perm, F))
+    for bidx in range(n_perm):
+        y = perm_within(x, g, rng)
+        for k, (_, _, uu, vv, ww) in enumerate(members):
+            Qd[bidx, k], Dd[bidx, k] = qd(y, uu, vv, ww)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        R = np.where(Dd > 1e-12, Qd / Dd, np.nan)
+    obs = np.array([newman(mixing(x, uu, vv, ww, K)) for _, _, uu, vv, ww in members])
+    ok = np.isfinite(obs) & np.all(np.isfinite(R), axis=0)
+    z, p_raw, p_maxT, p_bh = (np.full(F, np.nan) for _ in range(4))
+    if ok.any():
+        zz, a, b, c = maxT_adjust(obs[ok], R[:, ok]); z[ok], p_raw[ok], p_maxT[ok], p_bh[ok] = zz, a, b, c
+    rows = []
+    for k, (op, st, uu, vv, ww) in enumerate(members):
+        nul = R[:, k][np.isfinite(R[:, k])]; r = obs[k]
+        mQ, mD = null_expectation(x, g, uu, vv, ww)
+        rcf = mQ / mD if mD > 1e-12 else np.nan
+        so = rcf - np.cov(Qd[:, k], Dd[:, k])[0, 1] / mD ** 2 + mQ * Dd[:, k].var() / mD ** 3 if mD > 1e-12 else np.nan
+        good = len(nul) and r == r
+        rows.append(dict(operator=op, stratum=st, n_arcs=len(uu), weight=float(ww.sum()), r_obs=r,
+                         r_cf=rcf, r_perm=nul.mean() if len(nul) else np.nan, sd_null=nul.std() if len(nul) else np.nan,
+                         mc_se=nul.std() / np.sqrt(len(nul)) if len(nul) else np.nan, second_order=so,
+                         p_upper=(1 + np.sum(nul >= r - 1e-12)) / (1 + len(nul)) if good else np.nan,
+                         p_lower=(1 + np.sum(nul <= r + 1e-12)) / (1 + len(nul)) if good else np.nan,
+                         p_two=p_raw[k], p_maxT=p_maxT[k], p_BH=p_bh[k], z=z[k], family_size=int(ok.sum()),
+                         excess=r - rcf, borrowed=(rcf / r) if (r == r and abs(r) > 1e-9) else np.nan))
+    return rows

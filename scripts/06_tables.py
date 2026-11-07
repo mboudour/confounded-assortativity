@@ -34,8 +34,7 @@ for net in ["friendship", "diaries"]:
                      f"{f3(r.excess)} & {fp(r.p_two)} & {pct(r.borrowed) if r.r_obs > 0.05 else '--'} \\\\")
 write("thiers_all", L)
 
-# Thiers IB profile, gender | class, with max-T adjusted p
-m = pd.read_csv(f"{RES}/thiers_multiplicity.csv")
+# Thiers IB profile, gender | class (p-values from the same 20,000 permutations)
 s = d[(d.X == "sex") & (d.G == "class") & (d.stratum != "all")]
 L = []
 for net in ["friendship", "diaries"]:
@@ -43,17 +42,15 @@ for net in ["friendship", "diaries"]:
         cells = []
         for st in ["II", "IB", "BI", "BB"]:
             r = s[(s.network == net) & (s.operator == op) & (s.stratum == st)].iloc[0]
-            mm = m[(m.network == net) & (m.G == "class") & (m.operator == op) & (m.stratum == st)]
-            pa = mm.p_maxT.iloc[0] if len(mm) else float("nan")
-            star = "$^{\\dagger}$" if pa < 0.05 else ("$^{*}$" if r.p_two < 0.05 else "")
+            star = "$^{\\dagger}$" if r.p_maxT < 0.05 else ("$^{*}$" if r.p_two < 0.05 else "")
             cells.append(f"{f3(r.r_obs)}{star} / {f3(r.r_cf)} [{int(r.n_arcs)}]")
         L.append(f"{('Friendship' if net == 'friendship' else 'Diaries') if op == 'A' else ''} & ${op}$ & " + " & ".join(cells) + " \\\\")
 write("thiers_ib", L)
 
-# Multiplicity: all family members with raw p < 0.05
-mm = m[m.p_raw < 0.05].copy()
-write("thiers_mult", [f"{'friendship' if r.network == 'friendship' else 'diaries'} & gender $\\mid$ {r.G} & ${r.operator}$ & {r.stratum} & "
-                      f"{f3(r.r_obs)} & {f"{r.z:+.2f}".replace("-", "$-$")} & {fp(r.p_raw)} & {fp(r.p_maxT)} & {fp(r.p_BH)} \\\\" for _, r in mm.iterrows()])
+# Multiplicity: members of the gender families with unadjusted two-sided p < 0.05
+mm = d[(d.X == "sex") & (d.p_two < 0.05)]
+write("thiers_mult", [f"{r.network} & gender $\\mid$ {r.G} & ${r.operator}$ & {r.stratum} & "
+                      f"{f3(r.r_obs)} & {f'{r.z:+.2f}'.replace('-', '$-$')} & {fp(r.p_two)} & {fp(r.p_maxT)} & {fp(r.p_BH)} \\\\" for _, r in mm.iterrows()])
 
 # Lazega main table
 d = pd.read_csv(f"{RES}/lazega.csv"); a = d[(d.stratum == "all") & (d.operator == "A")]
