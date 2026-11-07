@@ -77,15 +77,15 @@ def fig_dotplot():
         ("Lazega advice: age | status", pick(l, network="advice", X="age3", G="status"), "firm"),
         ("Lazega friendship: status | office", pick(l, network="friendship", X="status", G="office"), "firm"),
         ("Lazega advice: practice | office", pick(l, network="advice", X="practice", G="office"), "firm"),
-        ("OpenAlex citation: topic | country", pick(o, X="topic", G="country"), "cite"),
-        ("OpenAlex citation: country | topic", pick(o, X="country", G="topic"), "cite"),
+        ("OpenAlex citation: topic | country", pick(o, X="topic", G="country", weighting="full"), "cite"),
+        ("OpenAlex citation: country | topic", pick(o, X="country", G="topic", weighting="full"), "cite"),
     ]
     fig, ax = plt.subplots(figsize=(6.2, 4.0))
     y = np.arange(len(rows))[::-1]
     for yi, (name, r, _) in zip(y, rows):
-        ax.plot([r.r_null_exact, r.r_obs], [yi, yi], color=GRID, lw=2, zorder=1, solid_capstyle="round")
-        ax.errorbar(r.r_null_exact, yi, xerr=1.96 * r.sd_null, fmt="none", ecolor=CAT[1], elinewidth=1, capsize=2, zorder=2)
-        ax.scatter(r.r_null_exact, yi, s=36, facecolor=SURF, edgecolor=CAT[1], linewidth=1.6, zorder=3, marker="D")
+        ax.plot([r.r_cf, r.r_obs], [yi, yi], color=GRID, lw=2, zorder=1, solid_capstyle="round")
+        ax.errorbar(r.r_cf, yi, xerr=1.96 * r.sd_null, fmt="none", ecolor=CAT[1], elinewidth=1, capsize=2, zorder=2)
+        ax.scatter(r.r_cf, yi, s=36, facecolor=SURF, edgecolor=CAT[1], linewidth=1.6, zorder=3, marker="D")
         ax.scatter(r.r_obs, yi, s=40, color=CAT[0], edgecolor=SURF, linewidth=1.5, zorder=4)
     ax.set_yticks(y); ax.set_yticklabels([n for n, _, _ in rows], color=INK)
     for yy in (y[3] - 0.5, y[8] - 0.5): ax.axhline(yy, color=GRID, lw=0.8)
@@ -94,7 +94,7 @@ def fig_dotplot():
     ax.grid(axis="x", color=GRID, lw=0.5); ax.set_axisbelow(True)
     ax.scatter([], [], s=40, color=CAT[0], label="observed $r(X)$")
     ax.scatter([], [], s=36, facecolor=SURF, edgecolor=CAT[1], linewidth=1.6, marker="D",
-               label="borrowed $r_0(X\\mid G)$ ($\\pm$1.96 SD)")
+               label="borrowed $r_{\\mathrm{cf}}(X\\mid G)$ ($\\pm$1.96 perm. SD)")
     ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=2, frameon=False, labelcolor=INK)
     fig.savefig(os.path.join(FIG, "fig2_observed_vs_borrowed.pdf"), bbox_inches="tight"); plt.close(fig)
 
@@ -108,7 +108,7 @@ def fig_heatmap():
         for i, op in enumerate("ATO"):
             for j, st in enumerate(["II", "IB", "BI", "BB"]):
                 r = s[(s.network == net) & (s.operator == op) & (s.stratum == st)].iloc[0]
-                M[i, j] = r.excess; P[i, j] = min(1, 2 * min(r.p_upper, r.p_lower))
+                M[i, j] = r.excess; P[i, j] = r.p_two
         ax.imshow(M, cmap=DIV, norm=norm, aspect="auto")
         for i in range(3):
             for j in range(4):
@@ -125,8 +125,8 @@ def fig_heatmap():
     fig.savefig(os.path.join(FIG, "fig3_excess_profile.pdf"), bbox_inches="tight"); plt.close(fig)
 
 # ---------------------------------------------------------------- Fig. 4
-def fig_planted():
-    d = pd.read_csv(f"{RES}/planted.csv")
+def fig_synthetic():
+    d = pd.read_csv(f"{RES}/synthetic.csv")
     fig, axes = plt.subplots(1, 2, figsize=(6.2, 2.4), sharey=True)
     marks = ["o", "s", "^"]
     for ax, deg, title in zip(axes, ["homogeneous", "heterogeneous"], ["Homogeneous degrees", "Heterogeneous degrees"]):
@@ -139,10 +139,32 @@ def fig_planted():
         ax.set_ylim(0, 1.12); ax.axhline(1, color=INK2, lw=0.6, ls=":")
         ax.grid(axis="y", color=GRID, lw=0.5); ax.set_axisbelow(True); ax.set_title(title, fontsize=9, color=INK)
     axes[0].set_ylabel("borrowed share  $r_0/r$")
-    fig.savefig(os.path.join(FIG, "fig4_planted.pdf"), bbox_inches="tight"); plt.close(fig)
+    fig.savefig(os.path.join(FIG, "fig4_synthetic.pdf"), bbox_inches="tight"); plt.close(fig)
+
+# ---------------------------------------------------------------- Fig. S1
+def fig_replications():
+    d = pd.read_csv(f"{RES}/synthetic_replications_all.csv"); d["diff"] = d.r_cf - d.r_perm
+    fig, axes = plt.subplots(1, 2, figsize=(6.2, 2.5), sharey=True)
+    for ax, deg, title in zip(axes, ["homogeneous", "heterogeneous"], ["Homogeneous degrees", "Heterogeneous degrees"]):
+        q = d[d.degrees == deg]; cells = list(q.groupby(["eta", "lam"]))
+        data = [g["diff"].values * 1e3 for _, g in cells]
+        bp = ax.boxplot(data, widths=0.55, patch_artist=True, showfliers=True,
+                        flierprops=dict(marker="o", ms=2.5, mfc=INK2, mec="none"),
+                        medianprops=dict(color=INK, lw=1.2), whiskerprops=dict(color=INK2), capprops=dict(color=INK2))
+        for k, b in enumerate(bp["boxes"]):
+            b.set_facecolor(CAT[k // 3]); b.set_alpha(0.55); b.set_edgecolor(INK2)
+        ax.axhline(0, color=INK2, lw=0.6)
+        ax.set_xticks(range(1, len(cells) + 1)); ax.set_xticklabels([f"{int(l)}" for (e, l), _ in cells], fontsize=7)
+        for k, eta in enumerate(sorted(q.eta.unique())):
+            ax.text(2 + 3 * k, 1.0, f"$\\eta={eta:.1f}$", transform=ax.get_xaxis_transform(), ha="center", va="bottom", fontsize=8, color=INK)
+        ax.set_xlabel("direct homophily $\\lambda$ (grouped by $\\eta$)"); ax.set_title(title, fontsize=9, color=INK, pad=14)
+        ax.grid(axis="y", color=GRID, lw=0.5); ax.set_axisbelow(True)
+    axes[0].set_ylabel("$r_{\\mathrm{cf}} - \\bar r_{\\mathrm{perm}}$  ($\\times 10^{-3}$)")
+    fig.savefig(os.path.join(FIG, "figS1_replications.pdf"), bbox_inches="tight"); plt.close(fig)
 
 if __name__ == "__main__":
-    fig_dotplot(); fig_heatmap(); fig_planted()
+    fig_dotplot(); fig_heatmap(); fig_synthetic()
+    if os.path.exists(f"{RES}/synthetic_replications_all.csv"): fig_replications()
     if os.path.exists(f"{DATA}/thiers/metadata_2013.txt"):
         print(f"quotient-graph class assortativity r = {fig_quotient():.3f}")
     print("figures written to", FIG)

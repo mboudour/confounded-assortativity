@@ -4,7 +4,8 @@ import numpy as np
 STRATA = ("II", "IB", "BI", "BB")
 
 def mixing(x, u, v, w, K):
-    e = np.zeros((K, K)); np.add.at(e, (x[u], x[v]), w); return e
+    """Unnormalised mixing matrix: e[p, q] = total weight of arcs with x(tail)=p, x(head)=q."""
+    return np.bincount(x[u] * K + x[v], weights=w, minlength=K * K).reshape(K, K).astype(float)
 
 def newman(e):
     """Categorical Newman coefficient from an (unnormalised) mixing matrix."""
@@ -62,8 +63,12 @@ def null_expectation(x, g, u, v, w, finite=True):
     Eab = Ea @ Eb + cov
     return Etr - Eab, 1 - Eab
 
-def null_r(x, g, u, v, w, finite=True):
-    Q, D = null_expectation(x, g, u, v, w, finite); return Q / D
+def closed_form_r(x, g, u, v, w, finite=True):
+    """Closed-form borrowed assortativity r_cf = E[Q]/E[D] under the within-block null
+    (exact when finite=True; leading order when finite=False). It is not E[Q/D];
+    the mean permutation assortativity r_perm = E[Q/D] is estimated by permutation."""
+    Q, D = null_expectation(x, g, u, v, w, finite)
+    return Q / D if D > 1e-12 else np.nan
 
 def two_walk_operators(A):
     """Two-walk decomposition of the *binary* structure of A:
@@ -77,7 +82,7 @@ def two_walk_operators(A):
 
 def borrowed_table(x, g, arcsets, ib_codes, rng, n_perm=2000):
     """arcsets: dict name -> (u, v, w); ib_codes: dict name -> stratum code per arc (or None).
-    Returns list of dict rows: operator, stratum, n_arcs, r_obs, r_null_perm, sd, p, r_null_exact, borrowed."""
+    Returns list of dict rows: operator, stratum, n_arcs, r_obs, r_perm, sd, p, r_cf, borrowed."""
     K = x.max() + 1
     perms = [perm_within(x, g, rng) for _ in range(n_perm)]
     rows = []
@@ -93,13 +98,14 @@ def borrowed_table(x, g, arcsets, ib_codes, rng, n_perm=2000):
             r = newman(mixing(x, uu, vv, ww, K))
             nul = np.array([newman(mixing(y, uu, vv, ww, K)) for y in perms])
             nul = nul[~np.isnan(nul)]
-            ex = null_r(x, g, uu, vv, ww, True)
+            ex = closed_form_r(x, g, uu, vv, ww, True)
             rows.append(dict(operator=op, stratum=st, n_arcs=int(msk.sum()), weight=float(ww.sum()),
-                             r_obs=r, r_null_perm=nul.mean() if len(nul) else np.nan,
+                             r_obs=r, r_perm=nul.mean() if len(nul) else np.nan,
                              sd_null=nul.std() if len(nul) else np.nan,
                              p_upper=(1 + np.sum(nul >= r - 1e-12)) / (1 + len(nul)) if len(nul) and r == r else np.nan,
                              p_lower=(1 + np.sum(nul <= r + 1e-12)) / (1 + len(nul)) if len(nul) and r == r else np.nan,
-                             r_null_exact=ex, excess=r - ex,
+                             p_two=(1 + np.sum(np.abs(nul - nul.mean()) >= abs(r - nul.mean()) - 1e-12)) / (1 + len(nul)) if len(nul) and r == r else np.nan,
+                             r_cf=ex, excess=r - ex,
                              borrowed=(ex / r) if (r == r and abs(r) > 1e-9) else np.nan))
     return rows
 
@@ -114,3 +120,42 @@ def operator_arcsets(A, g, n):
         M = M.tocoo(); u, v, w = M.row, M.col, M.data.astype(float)
         out[name] = (u, v, w); codes[name] = 2 * bd[u].astype(int) + bd[v].astype(int)
     return out, codes, bd
+
+
+def permutation_family(x, g, arcsets, ib_codes, rng, n_perm=2000):
+    """Observed and permuted assortativity for a family of statistics (operator x {all, II, IB, BI, BB}).
+    Returns (labels, r_obs[F], r_perm_draws[n_perm, F]) with undefined members dropped."""
+    K = x.max() + 1; members = []
+    for op, (u, v, w) in arcsets.items():
+        codes = ib_codes.get(op)
+        subsets = [("all", np.ones(len(u), bool))]
+        if codes is not None:
+            subsets += [(STRATA[t], codes == t) for t in range(4)]
+        for st, m in subsets:
+            if m.sum() > 0:
+                members.append((op, st, u[m], v[m], w[m]))
+    obs = np.array([newman(mixing(x, uu, vv, ww, K)) for _, _, uu, vv, ww in members])
+    draws = np.empty((n_perm, len(members)))
+    for b in range(n_perm):
+        y = perm_within(x, g, rng)
+        draws[b] = [newman(mixing(y, uu, vv, ww, K)) for _, _, uu, vv, ww in members]
+    ok = np.isfinite(obs) & np.all(np.isfinite(draws), axis=0)
+    labels = [(op, st) for (op, st, *_), k in zip(members, ok) if k]
+    return labels, obs[ok], draws[:, ok]
+
+
+def maxT_adjust(obs, draws):
+    """Two-sided raw and max-T (Westfall-Young single-step) adjusted permutation p-values for
+    standardized excess z = (r - mean_perm) / sd_perm, plus Benjamini-Hochberg adjusted raw p."""
+    mu, sd = draws.mean(0), draws.std(0)
+    sd = np.where(sd > 0, sd, np.inf)
+    z_obs = np.abs(obs - mu) / sd; z_b = np.abs(draws - mu) / sd
+    B = draws.shape[0]
+    p_raw = (1 + (z_b >= z_obs - 1e-12).sum(0)) / (B + 1)
+    mx = z_b.max(1)
+    p_maxT = (1 + (mx[:, None] >= z_obs[None] - 1e-12).sum(0)) / (B + 1)
+    order = np.argsort(p_raw); m = len(p_raw); bh = np.empty(m)
+    run = 1.0
+    for rank, i in reversed(list(enumerate(order, start=1))):
+        run = min(run, p_raw[i] * m / rank); bh[i] = run
+    return (obs - draws.mean(0)) / np.where(draws.std(0) > 0, draws.std(0), np.nan), p_raw, p_maxT, bh

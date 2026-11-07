@@ -21,4 +21,4 @@ for net, f in [("friendship", "ELfriend"), ("advice", "ELadv")]:
         for r in borrowed_table(x, g, arcs, codes, rng, 2000):
             rows.append(dict(network=net, X=X, G=G, r_G=rG, n_interior=int((~bd).sum()), n=n, **r))
 df = pd.DataFrame(rows); df.to_csv(f"{RES}/lazega.csv", index=False)
-print(df.query("stratum=='all'")[["network","X","G","r_G","operator","n_arcs","r_obs","r_null_perm","r_null_exact","p_upper","p_lower","excess","borrowed"]].round(3).to_string(index=False))
+print(df.query("stratum=='all'")[["network","X","G","r_G","operator","n_arcs","r_obs","r_perm","r_cf","p_upper","p_lower","excess","borrowed"]].round(3).to_string(index=False))

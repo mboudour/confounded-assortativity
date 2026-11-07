@@ -10,3 +10,6 @@ paper/*.blg
 paper/*.fls
 paper/*.fdb_latexmk
 paper/*.synctex.gz
+
+# manuscript is not part of this repository
+paper/
