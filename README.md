@@ -27,7 +27,6 @@ scripts/03_lazega.py        Lazega law firm: age | status; office as negative co
 scripts/04_openalex_download.py   OpenAlex download (API key needed)
 scripts/05_openalex_analysis.py   OpenAlex citation network: topic | country (negative control)
 scripts/06_tables.py        LaTeX tables of the paper from results/
-scripts/06_tables.py        LaTeX tables of the paper from results/
 results/                    CSV outputs used in the paper
 paper/                      LaTeX source
 data/README.md              where and how to download the (public) data
